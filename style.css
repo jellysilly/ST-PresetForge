@@ -22,7 +22,9 @@
 
 .pf-anvil {
     position: fixed;
-    z-index: 3000;
+    /* Above SillyTavern's top bar (3005) and Moving UI panels (4000), below
+       its own dialogs, so the button stays reachable wherever it is dragged. */
+    z-index: 4050;
     inline-size: 52px;
     block-size: 52px;
     padding: 0;
@@ -156,12 +158,20 @@
 .pf-panel {
     position: fixed;
     inset-inline-end: 24px;
-    inset-block-end: 92px;
-    z-index: 3001;
+    /* Anchored from the top, in viewport units, on purpose. SillyTavern puts a
+       transform on <html>, which makes <html> the containing block for every
+       fixed element; on phones its box is zero pixels tall, so anything
+       anchored to its bottom edge is laid out above the top of the screen. */
+    inset-block-start: calc(100vh - 92px);
+    inset-block-start: calc(100dvh - 92px);
+    z-index: 4051;
     display: flex;
     flex-direction: column;
     inline-size: min(460px, calc(100vw - 32px));
-    max-block-size: min(82vh, 760px);
+    /* The last term keeps the card clear of the top edge: it is anchored 92px
+       up from the bottom, so that much plus a margin is unavailable to it. */
+    max-block-size: min(82vh, 760px, calc(100vh - 104px));
+    max-block-size: min(82dvh, 760px, calc(100dvh - 104px));
     color: var(--pf-text);
     background: var(--pf-surface);
     border: 1px solid var(--pf-border);
@@ -171,7 +181,9 @@
     -webkit-backdrop-filter: blur(calc(var(--SmartThemeBlurStrength, 10px) * 1.4));
     opacity: 0;
     visibility: hidden;
-    transform: translateY(14px) scale(0.97);
+    /* -100% lifts the card back above its anchor line, so it still reads as
+       "24px in from the right, 92px up from the bottom". */
+    transform: translateY(calc(-100% + 14px)) scale(0.97);
     transform-origin: bottom right;
     transition:
         opacity 0.26s var(--pf-ease),
@@ -182,8 +194,13 @@
 .pf-panel--open {
     opacity: 1;
     visibility: visible;
-    transform: translateY(0) scale(1);
+    transform: translateY(-100%) scale(1);
     transition-delay: 0s;
+}
+
+/* Once dragged the panel carries its own top/left, so the anchor offset goes. */
+.pf-panel--placed {
+    transform: none;
 }
 
 .pf-panel--dragging {
@@ -596,19 +613,22 @@
 
 @media (max-width: 720px) {
     .pf-panel {
-        inset: auto 0 0 0;
+        inset-inline: 0;
+        inset-block-start: 100vh;
+        inset-block-start: 100dvh;
         inline-size: 100%;
         max-block-size: 88dvh;
         border-radius: var(--pf-radius) var(--pf-radius) 0 0;
         border-inline: none;
         border-block-end: none;
-        transform: translateY(100%);
+        /* Closed, the sheet sits entirely below the fold and slides up. */
+        transform: translateY(0);
         transform-origin: bottom center;
         /* Never let the on-screen keyboard or the home bar cover the controls. */
         padding-block-end: env(safe-area-inset-bottom, 0px);
     }
 
-    .pf-panel--open { transform: translateY(0); }
+    .pf-panel--open { transform: translateY(-100%); }
 
     /* A grab handle, since the header no longer drags on touch. */
     .pf-panel__header::before {
@@ -635,8 +655,13 @@
 
 /* Landscape phones have very little height to spare. */
 @media (max-height: 460px) and (max-width: 940px) {
-    .pf-panel { max-block-size: 94dvh; }
     .pf-textarea { min-block-size: 64px; }
+}
+
+/* Only the full-width sheet may use nearly the whole screen: the floating card
+   still has to leave room for its bottom offset. */
+@media (max-height: 460px) and (max-width: 720px) {
+    .pf-panel { max-block-size: 94dvh; }
 }
 
 @media (prefers-reduced-motion: reduce) {

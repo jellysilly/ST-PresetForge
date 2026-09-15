@@ -89,6 +89,14 @@ function mount() {
     document.addEventListener('keydown', event => {
         if (event.key === 'Escape' && isOpen() && !state.busy) closePanel();
     });
+
+    // A panel dragged on a wide screen must not keep those coordinates once the
+    // window narrows and it becomes a bottom sheet.
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 720 || !root?.classList.contains('pf-panel--placed')) return;
+        root.classList.remove('pf-panel--placed');
+        for (const side of ['left', 'top', 'right', 'bottom']) root.style[side] = '';
+    });
 }
 
 function tabBar() {
@@ -114,36 +122,54 @@ function makeDraggable(panel, handle) {
     const start = event => {
         // Buttons inside the header keep their own behaviour, and on narrow
         // screens the panel is a fixed sheet that should not move.
+        if (event.button !== 0) return;
         if (event.target.closest('button') || window.innerWidth <= 720) return;
-        const point = event.touches?.[0] ?? event;
-        const rect = panel.getBoundingClientRect();
-        const offsetX = point.clientX - rect.left;
-        const offsetY = point.clientY - rect.top;
-        const isTouch = event.type === 'touchstart';
 
-        panel.classList.add('pf-panel--dragging');
+        const rect = panel.getBoundingClientRect();
+        const offsetX = event.clientX - rect.left;
+        const offsetY = event.clientY - rect.top;
+
+        // Pin the card to where it currently is, in plain viewport pixels, and
+        // drop the anchor offset the stylesheet applies.
+        panel.classList.add('pf-panel--dragging', 'pf-panel--placed');
+        panel.style.left = `${rect.left}px`;
+        panel.style.top = `${rect.top}px`;
+        panel.style.right = 'auto';
+        panel.style.bottom = 'auto';
+        try {
+            handle.setPointerCapture(event.pointerId);
+        } catch {
+            // Capture is a nicety; the listeners below still work without it.
+        }
 
         const move = moveEvent => {
-            const current = moveEvent.touches?.[0] ?? moveEvent;
+            if (moveEvent.pointerId !== event.pointerId) return;
             if (moveEvent.cancelable) moveEvent.preventDefault();
-            const x = Math.min(Math.max(current.clientX - offsetX, 0), window.innerWidth - rect.width);
-            const y = Math.min(Math.max(current.clientY - offsetY, 0), window.innerHeight - 60);
+            const x = Math.min(Math.max(moveEvent.clientX - offsetX, 0), window.innerWidth - rect.width);
+            const y = Math.min(Math.max(moveEvent.clientY - offsetY, 0), window.innerHeight - 60);
             panel.style.left = `${x}px`;
             panel.style.top = `${y}px`;
-            panel.style.right = 'auto';
-            panel.style.bottom = 'auto';
         };
-        const end = () => {
+        const end = endEvent => {
+            if (endEvent.pointerId !== event.pointerId) return;
             panel.classList.remove('pf-panel--dragging');
-            document.removeEventListener(isTouch ? 'touchmove' : 'mousemove', move);
-            document.removeEventListener(isTouch ? 'touchend' : 'mouseup', end);
+            handle.removeEventListener('pointermove', move);
+            handle.removeEventListener('pointerup', end);
+            handle.removeEventListener('pointercancel', end);
+            try {
+                handle.releasePointerCapture(event.pointerId);
+            } catch {
+                // Already released, or never captured.
+            }
         };
-        document.addEventListener(isTouch ? 'touchmove' : 'mousemove', move, { passive: false });
-        document.addEventListener(isTouch ? 'touchend' : 'mouseup', end);
+        handle.addEventListener('pointermove', move, { passive: false });
+        handle.addEventListener('pointerup', end);
+        handle.addEventListener('pointercancel', end);
     };
 
-    handle.addEventListener('mousedown', start);
-    handle.addEventListener('touchstart', start, { passive: true });
+    // One pointer stream only: listening for mouse and touch separately runs
+    // the same gesture twice on touch-capable machines.
+    handle.addEventListener('pointerdown', start);
 }
 
 /* ------------------------------------------------------------------ *
