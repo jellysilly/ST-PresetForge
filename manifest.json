@@ -1,0 +1,12 @@
+{
+    "display_name": "ST-PresetForge",
+    "loading_order": 100,
+    "requires": [],
+    "optional": ["connection-manager"],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "jellysilly",
+    "version": "1.0.0",
+    "homePage": "https://github.com/jellysilly/ST-PresetForge",
+    "auto_update": true
+}
